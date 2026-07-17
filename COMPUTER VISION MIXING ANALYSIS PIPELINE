@@ -12141,35 +12141,51 @@ class ProcessingEngine(QObject):
 # SECTION 9
 # =============================================================================
 
+from dataclasses import dataclass, field
+from typing import Any, List
+
+# Import your BubbleParameters class
+# Adjust the import path to match your project
+# from bubbles import BubbleParameters
+
 @dataclass
 class ProcessingState:
+    """
+    Holds the current state of the video processing pipeline.
+    bubble_config is always available and defaults to BubbleParameters.
+    """
 
-    frame_number:int = 0
+    frame_number: int = 0
+    timestamps: List[float] = field(default_factory=list)
+    rmi_history: List[Any] = field(default_factory=list)
+    bubble_history: List[Any] = field(default_factory=list)
+    tracks: List[Any] = field(default_factory=list)
 
-    timestamps:list = field(default_factory=list)
+    # Always present bubble_config
+    bubble_config: Any = field(default=None)
 
-    rmi_history:list = field(default_factory=list)
+    def __post_init__(self):
+        """
+        Ensure bubble_config is initialized with default BubbleParameters.
+        """
+        if self.bubble_config is None:
+            try:
+                # Create default BubbleParameters instance
+                self.bubble_config = BubbleParameters()
+            except NameError:
+                raise RuntimeError(
+                    "BubbleParameters class not found. "
+                    "Import it before creating ProcessingState."
+                )
 
-    bubble_history:list = field(default_factory=list)
-
-    tracks:list = field(default_factory=list)
-
-
-    def update(self,data):
-
+    def update(self, data: dict):
+        """Update state with new frame data."""
         self.frame_number += 1
+        self.timestamps.append(data.get("timestamp"))
+        self.rmi_history.append(data.get("rmi"))
+        self.bubble_history.append(data.get("bubbles"))
 
-        self.timestamps.append(
-            data["timestamp"]
-        )
 
-        self.rmi_history.append(
-            data.get("rmi")
-        )
-
-        self.bubble_history.append(
-            data.get("bubbles")
-        )
 
 # =============================================================================
 # Global Processing State
