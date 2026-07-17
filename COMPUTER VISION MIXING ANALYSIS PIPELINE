@@ -1547,20 +1547,11 @@ class VideoThread(QThread):
     Worker thread that continuously reads frames from a VideoSource
     and sends them to the ProcessingEngine for processing.
     """
-    frame_ready = pyqtSignal(object, float, int)  # frame, timestamp, frame_number
+    frame_ready = pyqtSignal(object, float, int)       # raw frame, timestamp, frame_number
+    frame_processed = pyqtSignal(object, float, int)   # processed frame, timestamp, frame_number
     video_finished = pyqtSignal()
 
     def __init__(self, processing_engine, video_source, parent=None):
-        """
-        Parameters
-        ----------
-        processing_engine : ProcessingEngine
-            The engine that will process each frame.
-        video_source : VideoSource
-            The source from which frames are read.
-        parent : QObject, optional
-            Parent QObject for Qt ownership.
-        """
         super().__init__(parent)
 
         # Store references
@@ -1584,10 +1575,13 @@ class VideoThread(QThread):
             timestamp = time.time()
 
             # Process the frame through the engine
-            self.engine.process_frame(frame)
+            processed_frame = self.engine.process_frame(frame)
 
             # Emit raw frame for display
             self.frame_ready.emit(frame, timestamp, self.frame_number)
+
+            # Emit processed frame for UI
+            self.frame_processed.emit(processed_frame, timestamp, self.frame_number)
 
             # Sleep to maintain FPS
             self.msleep(int(self.frame_interval * 1000))
@@ -1596,6 +1590,7 @@ class VideoThread(QThread):
         """Stop the video thread gracefully."""
         self._running = False
         self.wait()
+
 
 
 # =============================================================================
@@ -17724,8 +17719,11 @@ APPLICATION_CONFIG = {
 # =============================================================================
 
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
+import cv2
+
 
 class MainWindow(QMainWindow):
     """
@@ -17743,7 +17741,7 @@ class MainWindow(QMainWindow):
         self.dashboard = dashboard
 
         # -------------------------------
-        # Ensure central widget & layout
+        # Central widget & layout
         # -------------------------------
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
@@ -17752,7 +17750,15 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
 
         # -------------------------------
-        # Create all control buttons
+        # Video display label
+        # -------------------------------
+        self.video_label = QLabel(self)
+        self.video_label.setObjectName("video_label")
+        self.video_label.setScaledContents(True)
+        layout.addWidget(self.video_label)
+
+        # -------------------------------
+        # Control buttons
         # -------------------------------
         self.start_button = QPushButton("Start Processing", self)
         self.start_button.setObjectName("start_button")
@@ -17771,7 +17777,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.export_button)
 
         # -------------------------------
-        # Add dashboard widget if provided
+        # Dashboard widget (if provided)
         # -------------------------------
         if self.dashboard is not None:
             layout.addWidget(self.dashboard)
@@ -17792,255 +17798,59 @@ class MainWindow(QMainWindow):
     # Signal connections
     # -------------------------------------------------------------------------
     def connect_signals(self):
-        """
-        Connects UI signals to their respective slots.
-        """
+        """Connects UI signals to their respective slots."""
         self.start_button.clicked.connect(self.start_processing)
         self.pause_button.clicked.connect(self.pause_processing)
         self.stop_button.clicked.connect(self.stop_processing)
         self.export_button.clicked.connect(self.export_results)
 
+        # Video thread signals
+        self.video_thread.frame_processed.connect(self.update_display)
+        self.video_thread.video_finished.connect(self.on_video_finished)
+
     # -------------------------------------------------------------------------
     # Slots
     # -------------------------------------------------------------------------
     def start_processing(self):
-        """Slot to start video processing."""
-        if self.video_thread is not None:
+        """Start video processing."""
+        if self.video_thread and not self.video_thread.isRunning():
             self.video_thread.start()
 
     def pause_processing(self):
-        """Slot to pause video processing."""
-        if self.video_thread is not None and hasattr(self.video_thread, "pause"):
+        """Pause video processing."""
+        if self.video_thread and hasattr(self.video_thread, "pause"):
             self.video_thread.pause()
 
     def stop_processing(self):
-        """Slot to stop video processing."""
-        if self.video_thread is not None:
+        """Stop video processing."""
+        if self.video_thread:
             self.video_thread.stop()
 
     def export_results(self):
-        """Slot to export results."""
+        """Export results from the processing engine."""
         if hasattr(self.processing_engine, "export_results"):
             self.processing_engine.export_results()
 
-
-
-    # =============================================================================
-    # SECTION 12.3
-    # SIGNAL CONNECTIONS
-    # =============================================================================
-
-
-    def connect_signals(self):
-
-
-        # -----------------------------------------------------
-        # Buttons
-        # -----------------------------------------------------
-
-        self.start_button.clicked.connect(
-
-            self.start_experiment
-
-        )
-
-
-        self.pause_button.clicked.connect(
-
-            self.pause_experiment
-
-        )
-
-
-        self.stop_button.clicked.connect(
-
-            self.stop_experiment
-
-        )
-
-
-        self.export_button.clicked.connect(
-
-            self.export_results
-
-        )
-
-
-
-        # -----------------------------------------------------
-        # Video thread signals
-        # -----------------------------------------------------
-
-        self.video_thread.frame_processed.connect(
-
-            self.update_dashboard
-
-        )
-
-
-        self.video_thread.processing_finished.connect(
-
-            self.processing_finished
-
-        )
-
-
-
-    # =============================================================================
-    # SECTION 12.4
-    # EXPERIMENT CONTROL
-    # =============================================================================
-
-
-    def start_experiment(self):
-
-
-        self.status_label.setText(
-
-            "Experiment running..."
-
-        )
-
-
-        self.video_thread.start()
-
-
-
-    # -------------------------------------------------------------------------
-
-    def pause_experiment(self):
-
-
-        self.video_thread.toggle_pause()
-
-
-
-        self.status_label.setText(
-
-            "Experiment paused"
-
-        )
-
-
-
-    # -------------------------------------------------------------------------
-
-    def stop_experiment(self):
-
-
-        self.video_thread.stop()
-
-
-        self.status_label.setText(
-
-            "Stopping experiment..."
-
-        )
-
-
-
-    # -------------------------------------------------------------------------
-
-    def export_results(self):
-
-
-        filename = (
-            export_experiment_workbook()
-        )
-
-
-        if filename:
-
-
-            QMessageBox.information(
-
-                self,
-
-                "Export Complete",
-
-                f"Workbook saved:\n{filename}"
-
-            )
-
-
-
-    # =============================================================================
-    # RECEIVE DATA FROM PROCESSING THREAD
-    # =============================================================================
-
-
-    def update_dashboard(
-        self,
-        dashboard_image
-    ):
+    def update_display(self, frame, timestamp, frame_number):
         """
-        Receives processed dashboard frames
-        from VideoThread.
+        Update the UI with the processed frame.
         """
+        # Convert BGR (OpenCV) to RGB (Qt)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_frame.shape
+        bytes_per_line = ch * w
+        qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
 
+        # Show in QLabel
+        self.video_label.setPixmap(QPixmap.fromImage(qimg))
 
-        self.dashboard.update_image(
+        # Update status bar
+        self.statusBar().showMessage(f"Frame {frame_number} @ {timestamp:.2f}s")
 
-            dashboard_image
+    def on_video_finished(self):
+        """Handle end of video."""
+        self.statusBar().showMessage("Video finished.")
 
-        )
-
-
-
-    # -------------------------------------------------------------------------
-
-    def processing_finished(self):
-
-
-        self.status_label.setText(
-
-            "Experiment complete"
-
-        )
-
-
-
-    # =============================================================================
-    # SECTION 12.5
-    # APPLICATION SHUTDOWN
-    # =============================================================================
-
-
-    def closeEvent(self, event):
-
-
-        reply = QMessageBox.question(
-
-            self,
-
-            "Exit",
-
-            "Stop experiment and exit?",
-
-            QMessageBox.Yes |
-
-            QMessageBox.No
-
-        )
-
-
-        if reply == QMessageBox.Yes:
-
-
-            if self.video_thread.isRunning():
-
-                self.video_thread.stop()
-
-                self.video_thread.wait()
-
-
-
-            event.accept()
-
-
-        else:
-
-            event.ignore()
 
 
 
