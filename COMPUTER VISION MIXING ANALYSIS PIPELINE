@@ -12052,7 +12052,7 @@ class ProcessingEngine(QObject):
 
         # Ensure bubble tracker exists in state
         if not hasattr(self.state, "bubble_tracker"):
-            self.state.bubble_tracker = BubbleTracker()
+            self.state.bubble_tracker = BubbleTracker(TrackerConfig())
 
     def process_frame(self, frame):
         """
