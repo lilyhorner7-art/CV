@@ -17724,87 +17724,91 @@ APPLICATION_CONFIG = {
 # =============================================================================
 
 
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton
+from PyQt5.QtCore import Qt
+
 class MainWindow(QMainWindow):
     """
-    Main Qt application window.
-
-    Responsibilities
-    ----------------
-    • Build dashboard interface
-    • Control experiment lifecycle
-    • Connect processing pipeline
-    • Receive processed frames
-    • Trigger exports
+    Main application window for the CV Mixer Project.
+    Hosts the video display, dashboard, and control buttons.
     """
 
     def __init__(self, video_source, processing_engine, video_thread, dashboard):
         super().__init__()
 
+        # Store references to core components
         self.video_source = video_source
         self.processing_engine = processing_engine
         self.video_thread = video_thread
         self.dashboard = dashboard
 
-        self.setup_window()
-        self.setup_ui()
-        self.connect_signals()
-
-    # -------------------------------------------------------------------------
-    # Window Setup
-    # -------------------------------------------------------------------------
-    def setup_window(self):
-        self.setWindowTitle(APPLICATION_CONFIG["title"])
-        width, height = APPLICATION_CONFIG["window_size"]
-        self.resize(width, height)
-
-    # -------------------------------------------------------------------------
-    # User Interface
-    # -------------------------------------------------------------------------
-    def setup_ui(self):
-        central_widget = QWidget()
+        # -------------------------------
+        # Ensure central widget & layout
+        # -------------------------------
+        central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout()
         central_widget.setLayout(layout)
 
-        # Video display label
-        self.video_label = QLabel()
-        self.video_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.video_label)
+        # -------------------------------
+        # Create control buttons
+        # -------------------------------
+        self.start_button = QPushButton("Start Processing", self)
+        self.start_button.setObjectName("start_button")
+        layout.addWidget(self.start_button)
 
-        # Scientific dashboard widget
-        layout.addWidget(self.dashboard)
+        self.stop_button = QPushButton("Stop Processing", self)
+        self.stop_button.setObjectName("stop_button")
+        layout.addWidget(self.stop_button)
+
+        # -------------------------------
+        # Add dashboard widget if provided
+        # -------------------------------
+        if self.dashboard is not None:
+            layout.addWidget(self.dashboard)
+
+        # -------------------------------
+        # Connect signals
+        # -------------------------------
+        self.connect_signals()
+
+        # -------------------------------
+        # Window settings
+        # -------------------------------
+        self.setWindowTitle("CV Mixer Project - Main Window")
+        self.resize(1200, 800)
+        self.setAttribute(Qt.WA_DeleteOnClose)
 
     # -------------------------------------------------------------------------
-    # Signal Connections
+    # Signal connections
     # -------------------------------------------------------------------------
     def connect_signals(self):
-        # Connect ProcessingEngine output to MainWindow display
-        self.processing_engine.frame_processed.connect(self.update_display)
+        """
+        Connects UI signals to their respective slots.
+        """
+        # Start button
+        self.start_button.clicked.connect(self.start_processing)
 
-        # Also connect ProcessingEngine output to Dashboard metrics
-        self.processing_engine.frame_processed.connect(self.dashboard.update_metrics)
+        # Stop button
+        self.stop_button.clicked.connect(self.stop_processing)
 
     # -------------------------------------------------------------------------
-    # Slot: Update Display
+    # Slots
     # -------------------------------------------------------------------------
-    def update_display(self, frame, rmi_results, bubbles):
-        """Update the video display with the latest processed frame."""
-        qimg = self.convert_frame_to_qimage(frame)
-        self.video_label.setPixmap(QPixmap.fromImage(qimg))
+    def start_processing(self):
+        """
+        Slot to start video processing.
+        """
+        if self.video_thread is not None:
+            self.video_thread.start()
 
-        # Optional: overlay bubbles or RMI results here
-        # self.draw_overlays(bubbles, rmi_results)
-
-    def convert_frame_to_qimage(self, frame):
-        """Convert OpenCV BGR frame to QImage for display."""
-        import cv2
-        from PyQt5.QtGui import QImage
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_frame.shape
-        bytes_per_line = ch * w
-        return QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-
+    def stop_processing(self):
+        """
+        Slot to stop video processing.
+        """
+        if self.video_thread is not None:
+            self.video_thread.stop()
 
 
     # =============================================================================
