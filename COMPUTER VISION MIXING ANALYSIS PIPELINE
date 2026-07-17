@@ -17752,7 +17752,7 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
 
         # -------------------------------
-        # Create control buttons
+        # Create all control buttons
         # -------------------------------
         self.start_button = QPushButton("Start Processing", self)
         self.start_button.setObjectName("start_button")
@@ -17765,6 +17765,10 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton("Stop Processing", self)
         self.stop_button.setObjectName("stop_button")
         layout.addWidget(self.stop_button)
+
+        self.export_button = QPushButton("Export Results", self)
+        self.export_button.setObjectName("export_button")
+        layout.addWidget(self.export_button)
 
         # -------------------------------
         # Add dashboard widget if provided
@@ -17794,6 +17798,7 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self.start_processing)
         self.pause_button.clicked.connect(self.pause_processing)
         self.stop_button.clicked.connect(self.stop_processing)
+        self.export_button.clicked.connect(self.export_results)
 
     # -------------------------------------------------------------------------
     # Slots
@@ -17812,6 +17817,11 @@ class MainWindow(QMainWindow):
         """Slot to stop video processing."""
         if self.video_thread is not None:
             self.video_thread.stop()
+
+    def export_results(self):
+        """Slot to export results."""
+        if hasattr(self.processing_engine, "export_results"):
+            self.processing_engine.export_results()
 
 
 
