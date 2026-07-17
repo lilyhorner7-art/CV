@@ -17758,6 +17758,10 @@ class MainWindow(QMainWindow):
         self.start_button.setObjectName("start_button")
         layout.addWidget(self.start_button)
 
+        self.pause_button = QPushButton("Pause Processing", self)
+        self.pause_button.setObjectName("pause_button")
+        layout.addWidget(self.pause_button)
+
         self.stop_button = QPushButton("Stop Processing", self)
         self.stop_button.setObjectName("stop_button")
         layout.addWidget(self.stop_button)
@@ -17787,28 +17791,28 @@ class MainWindow(QMainWindow):
         """
         Connects UI signals to their respective slots.
         """
-        # Start button
         self.start_button.clicked.connect(self.start_processing)
-
-        # Stop button
+        self.pause_button.clicked.connect(self.pause_processing)
         self.stop_button.clicked.connect(self.stop_processing)
 
     # -------------------------------------------------------------------------
     # Slots
     # -------------------------------------------------------------------------
     def start_processing(self):
-        """
-        Slot to start video processing.
-        """
+        """Slot to start video processing."""
         if self.video_thread is not None:
             self.video_thread.start()
 
+    def pause_processing(self):
+        """Slot to pause video processing."""
+        if self.video_thread is not None and hasattr(self.video_thread, "pause"):
+            self.video_thread.pause()
+
     def stop_processing(self):
-        """
-        Slot to stop video processing.
-        """
+        """Slot to stop video processing."""
         if self.video_thread is not None:
             self.video_thread.stop()
+
 
 
     # =============================================================================
