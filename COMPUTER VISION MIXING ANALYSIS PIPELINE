@@ -1542,11 +1542,17 @@ class CalibrationState:
 from PyQt5.QtCore import QThread, pyqtSignal
 import time
 
+from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition
+import time
+
+
 class VideoThread(QThread):
     """
     Worker thread that continuously reads frames from a VideoSource
     and sends them to the ProcessingEngine for processing.
     """
+
+    # Signals
     frame_ready = pyqtSignal(object, float, int)       # raw frame, timestamp, frame_number
     frame_processed = pyqtSignal(object, float, int)   # processed frame, timestamp, frame_number
     video_finished = pyqtSignal()
@@ -1562,25 +1568,34 @@ class VideoThread(QThread):
         self.frame_number = 0
         self.frame_interval = 1.0 / getattr(video_source, "fps", 30)  # fallback to 30 FPS
         self._running = True
+        self._paused = False
+
+        # Thread synchronization
+        self._pause_mutex = QMutex()
+        self._pause_condition = QWaitCondition()
 
     def run(self):
         """Main loop: read frames, process them, emit signals."""
         while self._running:
-            success, frame = self.video_source.read()
+            # Handle pause
+            self._pause_mutex.lock()
+            while self._paused and self._running:
+                self._pause_condition.wait(self._pause_mutex)
+            self._pause_mutex.unlock()
+
+            # Read frame from source (success, frame, timestamp)
+            success, frame, timestamp = self.video_source.read()
             if not success:
                 self.video_finished.emit()
                 break
 
             self.frame_number += 1
-            timestamp = time.time()
 
-            # Process the frame through the engine
+            # Process the frame
             processed_frame = self.engine.process_frame(frame)
 
-            # Emit raw frame for display
+            # Emit raw and processed frames
             self.frame_ready.emit(frame, timestamp, self.frame_number)
-
-            # Emit processed frame for UI
             self.frame_processed.emit(processed_frame, timestamp, self.frame_number)
 
             # Sleep to maintain FPS
@@ -1589,7 +1604,22 @@ class VideoThread(QThread):
     def stop(self):
         """Stop the video thread gracefully."""
         self._running = False
+        self.resume()  # In case it's paused
         self.wait()
+
+    def pause(self):
+        """Pause the video thread."""
+        self._pause_mutex.lock()
+        self._paused = True
+        self._pause_mutex.unlock()
+
+    def resume(self):
+        """Resume the video thread."""
+        self._pause_mutex.lock()
+        self._paused = False
+        self._pause_mutex.unlock()
+        self._pause_condition.wakeAll()
+
 
 
 
@@ -17808,18 +17838,21 @@ class MainWindow(QMainWindow):
         self.video_thread.frame_processed.connect(self.update_display)
         self.video_thread.video_finished.connect(self.on_video_finished)
 
+
     # -------------------------------------------------------------------------
     # Slots
     # -------------------------------------------------------------------------
     def start_processing(self):
-        """Start video processing."""
         if self.video_thread and not self.video_thread.isRunning():
             self.video_thread.start()
+        elif self.video_thread and self.video_thread.isRunning():
+            self.video_thread.resume()
+
 
     def pause_processing(self):
-        """Pause video processing."""
-        if self.video_thread and hasattr(self.video_thread, "pause"):
+        if self.video_thread:
             self.video_thread.pause()
+
 
     def stop_processing(self):
         """Stop video processing."""
